@@ -1,5 +1,5 @@
 context:
-  version: "9.17"
+  version: "9.18"
 
 package:
   name: pgadmin4
@@ -10,7 +10,7 @@ source:
   # rattler-build does not unpack ".whl" files, so the wheel is copied into
   # $SRC_DIR verbatim and installed directly by the build script below.
   url: https://pypi.org/packages/py3/p/pgadmin4/pgadmin4-${{ version }}-py3-none-any.whl
-  sha256: f11d217e6fcfea8573c297d8228082a921c6a553020cc130d0fcda3ae87e4684
+  sha256: 9ea084fc416265e4fc95c9fb6e6ae0f6668d34da8670c9b65c79cea054124356
 
 build:
   noarch: python
