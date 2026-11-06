@@ -30,6 +30,8 @@ requirements:
     - nodejs 22.*
     - yarn 4.15.*
     - git
+    - if: osx
+      then: ${{ stdlib('c') }}
   host:
     - python ${{ python_min }}.*
     - pip
