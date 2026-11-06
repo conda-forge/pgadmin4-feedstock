@@ -1,31 +1,22 @@
 context:
-  version: "9.17"
+  version: "9.19"
 
 package:
   name: pgadmin4
   version: ${{ version }}
 
 source:
-  # pgAdmin 4 has never published an sdist on PyPI -- only a py3-none-any wheel.
-  # rattler-build does not unpack ".whl" files, so the wheel is copied into
-  # $SRC_DIR verbatim and installed directly by the build script below.
-  url: https://pypi.org/packages/py3/p/pgadmin4/pgadmin4-${{ version }}-py3-none-any.whl
-  sha256: f11d217e6fcfea8573c297d8228082a921c6a553020cc130d0fcda3ae87e4684
+  - url: https://pypi.org/packages/py3/p/pgadmin4/pgadmin4-${{ version }}-py3-none-any.whl
+    sha256: 8f7a9966a3bc59144d34900c6ec2a9ba71d6d5ac54fe849747f5dafa6df89462
+  # The 9.19 wheel omits the compiled web assets; build them from matching source.
+  - url: https://ftp.postgresql.org/pub/pgadmin/pgadmin4/v${{ version }}/source/pgadmin4-${{ version }}.tar.gz
+    sha256: 7b1183a8b6a620e6d92814c97fb56b351f26ef7b0b59b82865a5aa54fe01c607
+    target_directory: frontend
 
 build:
   noarch: python
   number: 0
-  script:
-    # Pull pgAdmin's own licence plus the webpack-emitted third-party notices for
-    # the prebuilt JS bundles out of the wheel, so `about.license_file` finds them.
-    - ${{ PYTHON }} -c "import zipfile; z = zipfile.ZipFile('pgadmin4-${{ version }}-py3-none-any.whl'); z.extract('pgadmin4/LICENSE'); z.extractall(members=[n for n in z.namelist() if n.endswith('.js.LICENSE.txt')])"
-    - ${{ PYTHON }} -m pip install pgadmin4-${{ version }}-py3-none-any.whl --no-deps --no-build-isolation -vv
-    # Install the conda-specific console-script wrapper next to the upstream
-    # modules, so it is importable as pgadmin4.conda_entry.
-    - ${{ PYTHON }} -c "import os, shutil, sysconfig; shutil.copyfile(os.path.join(os.environ['RECIPE_DIR'], 'conda_entry.py'), os.path.join(sysconfig.get_path('purelib'), 'pgadmin4', 'conda_entry.py'))"
-    # Drop the POSIX launchers pip generated -- they are useless on Windows for a
-    # noarch package. rattler-build regenerates both from build.python.entry_points.
-    - ${{ PYTHON }} -c "import os, sysconfig; [os.path.exists(p) and os.remove(p) for p in (os.path.join(sysconfig.get_path('scripts'), n) for n in ('pgadmin4', 'pgadmin4-cli'))]"
+  script: python "${{ RECIPE_DIR }}/build.py"
 
   python:
     entry_points:
@@ -35,6 +26,10 @@ build:
       - pgadmin4-cli = pgadmin4.conda_entry:cli_main
 
 requirements:
+  build:
+    - nodejs 22.*
+    - yarn 4.15.*
+    - git
   host:
     - python ${{ python_min }}.*
     - pip
@@ -47,8 +42,8 @@ requirements:
     # Upstream pins every dependency with "==". Those pins are relaxed here to
     # ranges that keep the intended API compatibility while remaining solvable
     # against the rest of conda-forge.
-    - authlib >=1.7,<1.8
-    - azure-identity >=1.25.3,<2
+    - authlib >=1.9,<1.10
+    - azure-identity >=1.26.0,<2
     - azure-mgmt-rdbms >=10.1.1,<11
     # <26 is not cosmetic: 26.0.0 dropped the aggregate azure.mgmt.resource
     # namespace, so pgadmin.misc.cloud.azure's
@@ -57,8 +52,8 @@ requirements:
     - azure-mgmt-subscription >=3.1.1,<4
     - bcrypt >=5.0,<6
     - boto3 >=1.43,<2
-    - certifi >=2026.6.17
-    - cryptography >=49.0
+    - certifi >=2026.10.23
+    - cryptography >=50.0,<51
     - flask >=3.1,<4
     - flask-babel >=4.0,<5
     - flask-compress >=1,<2
@@ -66,31 +61,32 @@ requirements:
     - flask-mail >=0.9,<1
     - flask-migrate >=4,<5
     - flask-paranoid >=0.3,<1
-    - flask-security-too >=5.8,<6
-    - flask-socketio >=5.6,<6
+    - flask-security-too >=5.8.3,<5.9
+    - flask-socketio >=5.7,<6
     - flask-sqlalchemy >=3.1,<4
     - flask-wtf >=1.3,<2
     - google-api-python-client >=2,<3
-    - google-auth-oauthlib >=1.4.0,<2
+    - google-auth-oauthlib >=1.5.0,<2
     - jsonformatter >=0.3.4,<0.4
     - keyring >=25,<26
     - ldap3 >=2,<3
     - libgravatar >=1.0,<2
-    - paramiko >=3.5.1
-    - passlib >=1,<2
+    - paramiko >=3.5.1,<4
     - psutil >=7.2,<8
-    - psycopg >=3.3.4,<4
+    - psycopg >=3.3.6,<4
+    # require_auth is needed to block service-account GSSAPI/SSPI credentials.
+    - libpq >=16
     - pyotp >=2,<3
     - python-dateutil >=2,<3
-    - pytz
+    - pytz >=2026
     - qrcode >=8,<9
     - pillow  # the "pil" extra of qrcode
-    - setuptools
+    - setuptools >=84,<85
     - sqlalchemy >=2,<3
     - sqlparse >=0.4,<1
     - sshtunnel >=0.4,<1
-    - typer >=0.26,<1
-    - urllib3 >=2.7,<3
+    - typer >=0.27,<1
+    - urllib3 >=2.8,<3
     - user-agents >=2.2.0,<3
     - werkzeug >=3.1,<4
     - wtforms >=3.2,<4
@@ -142,8 +138,10 @@ tests:
         - pgadmin4/conda_entry.py
         - pgadmin4/pgAdmin4.py
         - pgadmin4/pgadmin/__init__.py
-        # The prebuilt web assets are the reason this recipe uses the wheel.
         - pgadmin4/pgadmin/static/js/generated/app.bundle.js
+        - pgadmin4/pgadmin/static/js/generated/security.pages.js
+        - pgadmin4/pgadmin/static/js/generated/style.css
+        - pgadmin4/pgadmin/static/js/generated/*.js.LICENSE.txt
 
 about:
   homepage: https://www.pgadmin.org/
@@ -159,19 +157,19 @@ about:
     This package installs the server (web) mode of pgAdmin 4. Start it with the
     `pgadmin4` command and connect a browser to the address it prints; use
     `pgadmin4-cli` for the setup and user-management commands. The client-side
-    assets are prebuilt and shipped in the upstream wheel.
-  # pgAdmin's own code is under the PostgreSQL licence. The wheel also ships
-  # prebuilt JS bundles that vendor third-party code; every bundled component's
+    assets are built from the matching upstream source release.
+  # pgAdmin's own code is under the PostgreSQL licence. The compiled JS bundles
+  # vendor third-party code; every bundled component's
   # notice is permissive (MIT/ISC/BSD-3-Clause, DOMPurify dual Apache-2.0 or
   # MPL-2.0, Font Awesome icons CC-BY-4.0 and fonts OFL-1.1). No copyleft.
   license: PostgreSQL AND MIT AND ISC AND BSD-2-Clause AND BSD-3-Clause AND (Apache-2.0 OR MPL-2.0) AND Apache-2.0 AND OFL-1.1 AND CC-BY-4.0
   license_file:
-    - pgadmin4/LICENSE
-    - pgadmin4/pgadmin/static/js/generated/*.js.LICENSE.txt
+    - frontend/LICENSE
+    - frontend/web/pgadmin/static/js/generated/*.js.LICENSE.txt
     # The webpack-emitted *.js.LICENSE.txt files above are attribution notices
     # naming each bundled component's licence; they do not carry the full
     # terms. licenses/ holds the complete SPDX texts they refer to.
-    - licenses/
+    - licenses/*.txt
   documentation: https://www.pgadmin.org/docs/
   repository: https://github.com/pgadmin-org/pgadmin4
 
