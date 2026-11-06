@@ -23,7 +23,7 @@ activity.
 This package installs the server (web) mode of pgAdmin 4. Start it with the
 `pgadmin4` command and connect a browser to the address it prints; use
 `pgadmin4-cli` for the setup and user-management commands. The client-side
-assets are prebuilt and shipped in the upstream wheel.
+assets are built from the matching upstream source release.
 
 Current build status
 ====================
