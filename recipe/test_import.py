@@ -41,6 +41,8 @@ try:
         XDG_CACHE_HOME=os.path.join(home, "cache"),
         PGADMIN_SETUP_EMAIL="conda-forge@example.com",
         PGADMIN_SETUP_PASSWORD="conda-forge-build-test",
+        PGPASSWORD="must-not-leak-to-other-users",
+        PGSERVICE="must-not-be-inherited",
     )
     # Anything inherited from the build environment would mask what the
     # wrapper does, which is precisely what is under test here.
@@ -79,6 +81,22 @@ try:
     # server mode defaults to.
     config = pgadmin4_main.config
     assert config.SERVER_MODE is True, "expected the default server mode"
+    assert "PGPASSWORD" not in os.environ
+    assert "PGSERVICE" not in os.environ
+    assert config.SERVER_MODE_ALLOWED_SERVICES == []
+
+    from psycopg import pq
+    assert pq.version() >= 160000, "libpq must support require_auth"
+
+    # Even without CSRF protection, alternate Flask-Security forms must not
+    # bypass pgAdmin's login limits and password-change checks.
+    app = pgadmin4_main.app
+    app.config["WTF_CSRF_ENABLED"] = False
+    client = app.test_client()
+    assert client.get("/login").status_code == 200
+    for path in ("/login", "/verify", "/change", "/reset"):
+        response = client.post(path, data={})
+        assert response.status_code == 405, (path, response.status_code)
 
     derived_paths = {
         "DATA_DIR": config.DATA_DIR,
